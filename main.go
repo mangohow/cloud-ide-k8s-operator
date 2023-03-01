@@ -79,6 +79,9 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	klog.Infof("watched namespace:%s", WatchedNamespace)
+	klog.Infof("running mode:%s", controllers.Mode)
+
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
