@@ -70,16 +70,20 @@ func (r *WorkSpaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	wp := mv1.WorkSpace{}
 	err := r.Client.Get(context.Background(), req.NamespacedName, &wp)
 	// case 1、没有找到Workspace,说明WorkSpace被删除了,删除对应的Pod和PVC即可
-	if err != nil && errors.IsNotFound(err) {
-		if err = r.deletePod(req.NamespacedName); err != nil {
-			klog.Errorf("[Delete Workspace] delete pod error:%v", err)
-			return ctrl.Result{Requeue: true}, err
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if e1 := r.deletePod(req.NamespacedName); e1 != nil {
+				klog.Errorf("[Delete Workspace] delete pod error:%v", e1)
+				return ctrl.Result{Requeue: true}, e1
+			}
+			if e2 := r.deletePVC(req.NamespacedName); e2 != nil {
+				klog.Errorf("[Delete Workspace] delete pvc error:%v", e2)
+				return ctrl.Result{Requeue: true}, e2
+			}
+
+			return ctrl.Result{}, nil
 		}
-		if err = r.deletePVC(req.NamespacedName); err != nil {
-			klog.Errorf("[Delete Workspace] delete pvc error:%v", err)
-			return ctrl.Result{Requeue: true}, err
-		}
-	} else {
+
 		klog.Errorf("get workspace error:%v", err)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -100,6 +104,7 @@ func (r *WorkSpaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			klog.Errorf("[Start Workspace] create pod error:%v", err)
 			return ctrl.Result{Requeue: true}, err
 		}
+		r.updateStatus(&wp, mv1.WorkspacePhaseRunning)
 
 	// case3: 停止WorkSpace,删除Pod
 	case mv1.WorkSpaceStop:
@@ -109,9 +114,19 @@ func (r *WorkSpaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			klog.Errorf("[Stop Workspace] delete pod error:%v", err)
 			return ctrl.Result{Requeue: true}, err
 		}
+
+		r.updateStatus(&wp, mv1.WorkspacePhaseStopped)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r WorkSpaceReconciler) updateStatus(wp *mv1.WorkSpace, phase mv1.WorkSpacePhase) {
+	wp.Status.Phase = phase
+	err := r.Client.Status().Update(context.Background(), wp)
+	if err != nil {
+		klog.Errorf("update status error:%v", err)
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -30,6 +30,13 @@ const (
 	WorkSpaceStop                     = "Stop"
 )
 
+type WorkSpacePhase string
+
+const (
+	WorkspacePhaseRunning WorkSpacePhase = "Running"
+	WorkspacePhaseStopped                = "Stopped"
+)
+
 // WorkSpaceSpec defines the desired state of WorkSpace
 type WorkSpaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -39,6 +46,9 @@ type WorkSpaceSpec struct {
 	Cpu     string `json:"cpu,omitempty"`
 	Memory  string `json:"memory,omitempty"`
 	Storage string `json:"storage,omitempty"`
+
+	// 硬件资源
+	Hardware string `json:"hardware,omitempty"`
 
 	// The image
 	Image string `json:"image,omitempty"`
@@ -57,10 +67,14 @@ type WorkSpaceSpec struct {
 type WorkSpaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Phase WorkSpacePhase `json:"phase,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Hardware",type=string,JSONPath=`.spec.hardware`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // WorkSpace is the Schema for the workspaces API
 type WorkSpace struct {
