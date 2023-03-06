@@ -18,17 +18,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"github.com/mangohow/cloud-ide-k8s-operator/middleware"
-	"github.com/mangohow/cloud-ide-k8s-operator/pb"
-	"github.com/mangohow/cloud-ide-k8s-operator/service"
-	"github.com/mangohow/cloud-ide-k8s-operator/tools/signal"
-	"google.golang.org/grpc"
+	"github.com/mangohow/cloud-ide-k8s-operator/rpc"
 	"k8s.io/klog/v2"
-	"net"
 	"os"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -127,40 +119,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	//启动grpc server
-	server := StartGrpcServer(mgr.GetClient())
-	// 安装信号处理
-	ctx := signal.SetupSignal(func() {
-		ctrl.Log.Info("receive signal, is going to shutdown")
-		server.GracefulStop()
-	})
+	// 将grpc交由manager管理,manager会调用Start方法启动
+	if err := mgr.Add(rpc.New(mgr.GetClient(), ":6387")); err != nil {
+		setupLog.Error(err, "unable to set up grpc server")
+		os.Exit(1)
+	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func StartGrpcServer(client client.Client) *grpc.Server {
-	listener, err := net.Listen("tcp", ":6387")
-	if err != nil {
-		panic(fmt.Errorf("create grpc service: %v", err))
-	}
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		middleware.RecoveryInterceptorMiddleware(),
-		middleware.LogInterceptorMiddleware(),
-	))
-	pb.RegisterCloudIdeServiceServer(server, service.NewWorkSpaceService(client))
-
-	go func() {
-		err := server.Serve(listener)
-		if err != nil && err == grpc.ErrServerStopped {
-			klog.Info("server stopped")
-		} else if err != nil {
-			panic(fmt.Errorf("start grpc server: %v", err))
-		}
-	}()
-
-	return server
 }
